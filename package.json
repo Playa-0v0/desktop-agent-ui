@@ -1,0 +1,13 @@
+{
+  "name": "desktop-agent-ui-checks",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/browser.test.cjs"
+  },
+  "devDependencies": {
+    "playwright": "1.64.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

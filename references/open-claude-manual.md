@@ -1,140 +1,114 @@
 # 桌面参考实现手册导读与深度工程机制
 
-本手册梳理了现代桌面 Agent 界面系统的两代架构演进（从经典基础设计到 2.0 桌面工程底座），重点拆解结构分层、底层交互物理学、Zero-JS 渲染优化与生产级避坑机制。
+本手册按基础界面与进阶工程两组组织参考主题；这是阅读分类，不代表行业统一的代际演进或本仓库已完成的生产验证。技术结论以标准、目标运行时和实际测量为准。
 
 > [!TIP]
 > **如何获取与复刻该设计系统**：
 > 若用户明确希望为应用引入类似 Claude 桌面端的设计系统（Claude Design System），可直接前往上游获取完整资产：
 > - **在线手册与组件预览**：[openclaudeui.com](https://openclaudeui.com/)
-> - **开源代码与组件示例**：[`github.com/Caho1/open-claude-ui`](https://github.com/Caho1/open-claude-ui)（包含完整 Design Tokens 规范与 `code-examples/` 组件代码）
+> - **上游仓库**：[`github.com/Caho1/open-claude-ui`](https://github.com/Caho1/open-claude-ui)（按目标版本核实可复用模块与授权）
 > - **注意**：若项目已有成熟组件库（如 shadcn/ui），严禁强行替换，直接将本手册中的工程物理机制（如输入法守卫、CSS 滚动动效）迁移至现有组件中即可。
 
 ---
 
-## 核心设计与分卷导读
+## 如何使用参考实现
 
-### 第一代设计体系（经典桌面 Agent 界面架构）
+上游资料可用于研究组件与布局。复用前核对目标版本、许可证和项目已有能力，不假定本仓库的主题分类代表上游版本或行业架构演进。
 
-| 卷目 | 核心领域 | 重点覆盖与可迁移机制 |
-| --- | --- | --- |
-| **01 设计哲学与令牌体系** | Surface & Design Tokens | 多层 Surface 层级（Base / Elevated / Overlay）、颜色语义模型、字体层级、微阴影外扩与空间栅格系统 |
-| **02 基础原子组件与交互控件** | Atomic Controls | 按钮三态与 Loading 锁定、分段控件（Segmented Control）、状态指示灯、自适应弹窗与上下文附件卡片 |
-| **03 会话核心流与指令引擎** | Core Chat & Composer | 结构化消息流、思考过程时间轴折叠（Reasoning Timeline）、多模式 Composer、模型与工具执行授权卡 |
-| **04 动效物理学与环境光影** | Motion Physics & Lighting | Spring 物理预设、线性扫光动效、动态渐隐遮罩、以及展开折叠的流式锁机制 |
-| **05 视听媒体与产物交互** | Artifacts & Split Layout | 多媒体预览、可拖拽弹性分栏（Resizable Split）、代码差异对比（Diff）、双栏工作区布局 |
-| **06 系统级桌面架构与协作** | Desktop Shell & Accessibility | 平台窗口外壳、无边框沉浸式标题栏、原生快捷键拦截、流式输出自动滚动与无障碍焦点树 |
-| **07 工程配置与资产体系** | Build & Asset Topology | 桌面打包拓扑、代码分割、字体子集化内嵌与资产路径管理 |
-| **08 Agent 前端实战指南** | End-to-End Implementation | 将原子组件、状态总线与事件驱动组合为生产级 Agent 工作台的实施流程 |
-
-### 第二代架构进阶（现代生产级桌面平台底座）
-
-针对大规模长会话、复杂工具调用、多窗口协作与极致渲染性能，现代桌面架构进行了系统级重构：
-
-| 模块 | 演进重点 | 生产级工程要点 |
-| --- | --- | --- |
-| **综述与版本边界** | 架构目标升级 | 明确区分传统纯 Web 封装与现代桌面级原生能力的边界，确立多窗口流式总线 |
-| **独立窗口与任务队列** | 多窗口与离线机制 | 弹出式独立子窗口（Popped-out Window）、离线失败重试队列、Composer 下颌功能行（Chin）与思维深度调节（Effort Tier） |
-| **工作台架构与视觉密度** | 密度治理与用量可视化 | 紧凑（Compact）与舒适（Comfortable）双密度体系、长会话内存回收机制与配额实时消耗投影 |
-| **系统底座解密** | 纯 CSS 动效与时间令牌 | 全量 CSS Keyframes 体系、微秒级时间令牌分层、以及统一命名规范 |
-| **生产级参考实现** | 完整代码模式 | 窗口生命周期管理、多窗通信总线、事件防抖节流与兜底状态机 |
+- 优先迁移可解释的交互机制，避免为接近某个产品外观替换整套组件。
+- 将产品偏好与技术约束分开；下文示例可用于验证机制，实际接入仍须适配现有状态与组件。
 
 ---
 
 ## 深度工程机制与关键实现
 
-### 1. Zero-JS 纯 CSS 滚动驱动渐变遮罩（Scroll-Driven Animations）
+### 1. CSS（层叠样式表）滚动驱动遮罩
 
-在长对话流和消息容器的滚动边界处，传统方案采用 JS 监听 `scroll` 事件或使用 `IntersectionObserver` 动态计算 DOM 几何位置并设置遮罩透明度。在大批量流式输出时，频繁的 JS 测距会导致主线程严重的 Layout Thrashing 与帧率骤降。
+先确认目标运行时支持 `animation-timeline`。浏览器内置滚动时间线可以减少手写滚动监听；能否在合成线程运行取决于动画属性和实现，不能据此承诺零 CPU 占用或零主线程耗时。遮罩属性变化仍可能带来绘制成本，需用实际长会话测量。依据见 [S1、S2](sources.md)。
 
-**现代工程解法**：
-在现代 Chromium 渲染内核下，全面升级为 **CSS 滚动驱动动效（CSS Scroll-Driven Animations）**：
-- 利用 CSS Houdini `@property --cds-scroll-fade-*` 定义注册属性；
-- 在合成器线程直接通过 `animation-timeline: scroll()` 驱动 6 条独立时间线；
-- 达成 **0.0% CPU 占用** 与 **0ms 主线程阻塞**，彻底消除长列表滚动卡顿。
+下面是有上下边缘默认值、单位一致的最小示例。两端淡出长度是示例值；不支持时间线时保留可读内容，用户开启减弱动态效果时关闭动态遮罩。
 
 ```css
-@property --cds-scroll-fade-top {
-  syntax: '<percentage>';
+@property --agent-ui-fade-top {
+  syntax: '<length>';
   inherits: false;
-  initial-value: 0%;
+  initial-value: 0px;
 }
-
+@property --agent-ui-fade-bottom {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
 .scroll-container {
-  overflow-y: auto;
-  scroll-timeline: --timeline-scroll y;
-  mask-image: linear-gradient(
-    to bottom,
-    transparent 0%,
-    black var(--cds-scroll-fade-top),
-    black calc(100% - var(--cds-scroll-fade-bottom)),
-    transparent 100%
-  );
+  max-height: 24rem;
+  overflow: auto;
 }
-
-@keyframes scroll-fade-in {
-  from { --cds-scroll-fade-top: 0%; }
-  to { --cds-scroll-fade-top: 48px; }
-}
-
-.scroll-container {
-  animation: scroll-fade-in linear;
-  animation-timeline: --timeline-scroll;
-  animation-range: 0px 48px;
-}
-```
-
-### 2. WebKit / Chromium CJK 输入法 500ms 伴生 Enter 幽灵键工程守卫
-
-在中文、日文等 CJK 拼音输入法下，用户在候选词浮层按下 `Enter` 键确认选词时，浏览器在触发 `compositionend` 事件的同时或数毫秒后，会紧随抛出一个 keyCode 为 13 的伴生 `keydown` 幽灵事件。若仅简单检查 `e.isComposing`，在某些输入法引擎或高负荷渲染时，该伴生事件可能在 `isComposing` 置为 false 之后才到达，导致用户仅仅想选词，消息却被直接误发送。
-
-**精密守卫机制**：
-- 监听 `compositionend`，记录发生的时间戳 `lastCompositionEndTimestamp = performance.now()`；
-- 在输入框 `keydown` 事件中，判断若 `performance.now() - lastCompositionEndTimestamp < 500`，说明此 `Enter` 为伴生幽灵键，坚决拦截；
-- **核心闭环**：**在成功拦截该伴生键后，必须立即复位时间戳**（例如重置为 0），杜绝后续正常的快速再次击键被误吞。
-
-```typescript
-let lastCompositionEndTime = 0;
-
-export function handleCompositionEnd() {
-  lastCompositionEndTime = performance.now();
-}
-
-export function handleComposerKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>, onSend: () => void) {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    if (e.nativeEvent.isComposing) {
-      return; // 原生组字中直接放行
-    }
-    const elapsed = performance.now() - lastCompositionEndTime;
-    if (elapsed < 500) {
-      // 捕获并拦截伴生幽灵 Enter，随后立刻清空时间戳，保护下一按键
-      e.preventDefault();
-      lastCompositionEndTime = 0;
-      return;
-    }
-    // 正常发送逻辑
-    e.preventDefault();
-    onSend();
+@supports (animation-timeline: scroll()) {
+  .scroll-container {
+    mask-image: linear-gradient(to bottom,
+      transparent 0,
+      black var(--agent-ui-fade-top),
+      black calc(100% - var(--agent-ui-fade-bottom)),
+      transparent 100%);
+    animation: agent-ui-top linear both, agent-ui-bottom linear both;
+    animation-timeline: scroll(self block), scroll(self block);
+    animation-range: 0px 24px, calc(100% - 24px) 100%;
   }
 }
+@keyframes agent-ui-top {
+  from { --agent-ui-fade-top: 0px; }
+  to { --agent-ui-fade-top: 24px; }
+}
+@keyframes agent-ui-bottom {
+  from { --agent-ui-fade-bottom: 24px; }
+  to { --agent-ui-fade-bottom: 0px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scroll-container { animation: none; mask-image: none; }
+}
 ```
 
-### 3. 分栏拖拽（18%/82% 折叠吸附）与 Escape 键盘取消状态机闭环
+只把遮罩用于允许渐隐的内容区域，避免遮住滚动条、焦点环或交互控件。无溢出内容、顶部、中间、底部和减弱动态效果均需验证。
 
-在复杂工作台分栏（如对话流 + Artifact 产物预览）中，拖拽手柄移动至极值边缘（≤18% 或 ≥82%）时会自动吸附折叠以释放主工作空间。
+### 2. 输入法安全发送：事件基线与兼容边界
 
-**状态机死锁陷阱与防御**：
-当处于拖拽或吸附临界状态时，若用户按下 `Escape` 键意图取消拖拽，容易出现手柄 DOM 被直接卸载而 `isCollapsed` 状态未正确恢复，导致分栏无法再次展开的永久死锁。
-**工程闭环**：
-在全局键盘监听中捕获拖拽期间的 `Escape` 事件，必须严格执行三步状态机复位：
-1. 取消全局事件监听与 `isDragging` 标记；
-2. 显式调用 `setIsRightCollapsed(false)`，确保分割手柄组件保持挂载；
-3. 将分栏比例恢复至拖拽前的有效基准 `previousRatioRef.current`。
+优先沿用现有输入组件的输入法处理。新实现以 `compositionstart`、`compositionend` 和 `KeyboardEvent.isComposing` 为基线；不同系统、浏览器与输入法的事件序列需要实际记录，不能假定都会抛出同一种“伴生 Enter”。见 [S3](sources.md)。
 
-### 4. 多窗口状态一致性与工作区写锁（Broker-Replica 模式）
+以下工厂为每个输入框保存独立状态，支持普通 Enter（回车键）发送、Shift + Enter 换行。它不等待固定的 500 毫秒，因此组字结束后的独立发送不会被时间窗口吞掉。
 
-桌面应用允许将对话、文档或代码预览弹出为独立窗口。多窗口协同面临主进程与各渲染窗口状态分叉的风险：
-- **Broker-Replica 拓扑**：主窗口作为状态权威 Broker，弹出窗口作为 Replica 订阅不可变状态流（Immutable State Stream）；
-- **工作区写锁（Workspace Baseline Lock）**：当子窗口试图写入或修改某个文件对象时，必须先向主进程申领乐观基线锁；主进程比对基线版本哈希，仲裁是否存在冲突，防止并发脏写覆盖。
+```javascript
+function createComposerHandlers(onSend) {
+  let composing = false;
+  return {
+    compositionstart() { composing = true; },
+    compositionend() { composing = false; },
+    blur() { composing = false; },
+    keydown(event) {
+      if (event.key !== 'Enter' || event.shiftKey || event.ctrlKey ||
+          event.metaKey || event.altKey || event.repeat || event.defaultPrevented) return;
+      if (composing || event.isComposing) return;
+      event.preventDefault();
+      onSend();
+    },
+  };
+}
+```
+
+将同一实例的三个事件处理器和 `blur` 绑定到同一个输入框，卸载时解除绑定。框架封装事件需读取对应的原生组合状态；发送快捷键沿用产品配置，示例不是统一默认值。
+
+**已知边界**：这个基线不能宣称覆盖所有输入法。若某个目标平台在 `compositionend` 后才送出同一次确认键，且 `isComposing` 已为 false，需要依据真实事件日志，在该平台或组件中增加有针对性的兼容处理及回归用例；不能靠任意延时判断按键身份。合成事件测试不能代替真实输入法验收。
+
+### 3. 分栏拖拽与取消
+
+优先使用项目现有分栏库。最小宽度、是否吸附折叠、吸附阈值应根据内容与窗口尺寸确定；18%/82% 只是某种布局的示例，不是通用比例。
+
+取消拖拽时恢复交互前的完整快照，包括比例与折叠状态，并释放指针捕获、清理监听。不要固定执行 `setIsRightCollapsed(false)`：拖拽前可能本来就是折叠状态。复核 Escape（退出键）、指针取消、窗口失焦和组件卸载，优先调用库提供的取消接口。
+
+### 4. 多窗口一致性
+
+先复用已有状态存储、持久化和进程通信方案。确定哪个生命周期稳定的服务拥有权威状态：可能是主进程、服务端或受控共享服务；不要默认让可随时关闭的主窗口承担权威职责。
+
+多个窗口可订阅带版本的快照与增量事件。并发写入需要时，在权威写入端原子地校验预期版本并提交；冲突后重新读取并让用户处理。乐观并发控制不等于预先申领排他锁，单独比较一次哈希也不能避免检查与写入之间的竞争。窗口关闭、重连、事件缺口和重复请求必须有明确恢复方式。
 
 ---
 
