@@ -14,6 +14,7 @@ description: 设计、实现或排查桌面智能体应用的会话流、输入�
 | 借鉴桌面工作台或选取实现机制 | [参考实现导读](references/open-claude-manual.md) | 可运行的滚动遮罩、输入法基线、多窗口方案的前提 |
 | 排查窗口、裁切、焦点和滚动跳动 | [桌面工程经验](references/desktop-pitfalls.md) | 症状、可能根因、最小修复与真实环境验证 |
 | 设计会话、工具和任务交互 | [任务状态与控制权](references/agent-interaction.md) | 状态真实性、停止语义、恢复与副作用隔离 |
+| 实现或排查任务清单（Todo）面板 | [任务清单的状态与呈现](references/todo-panel.md) | 快照替换语义、顺序稳定性、全完成隐藏、运行态降级 |
 | 实现输入框、滚动跟随、动效或分栏 | [组件与动效](references/components-motion.md) | 复用现有能力、按阅读意图跟随、可中断交互 |
 | 验收本轮变更 | [验收清单](references/acceptance.md) | 按影响范围选检查项，区分诊断结果与通过证据 |
 | 打磨排版、文案与视觉精致度 | 本文[八大铁律](#界面排版文案与视觉精致度八大铁律) | 分隔符、冗余文案、同心圆圆角、边框、字号阶梯 |
@@ -80,6 +81,7 @@ desktop-agent-ui/
 │   ├── open-claude-manual.md     # 桌面参考实现手册导读与深度工程机制
 │   ├── desktop-pitfalls.md       # 桌面工程经验、高频返工与避坑指南
 │   ├── agent-interaction.md      # Agent 交互、状态流与控制权体系
+│   ├── todo-panel.md             # 任务清单面板的数据语义与呈现边界
 │   ├── components-motion.md      # 组件实现、动效契约与输入框配方
 │   ├── acceptance.md             # 裁切诊断与按改动范围选择的验收清单
 │   └── sources.md                # 架构分类与技术参考索引
